@@ -1,4 +1,4 @@
-package ui
+package views
 
 import (
 	"fmt"
@@ -16,12 +16,13 @@ var LogoBig = []string{
 	`        \_/\_/ |_| |_|\___/|___/\__|_| |_|\___|_|  \___| ()       `,
 }
 
-type Splash struct {
-	*tview.Flex
+// SplashPage adapts the splash logo into a Page.
+type SplashPage struct {
+	root *tview.Flex
 }
 
-func NewSplash() *Splash {
-	s := Splash{Flex: tview.NewFlex()}
+func NewSplashPage() *SplashPage {
+	s := &SplashPage{root: tview.NewFlex()}
 
 	logo := tview.NewTextView()
 	logo.SetDynamicColors(true)
@@ -33,7 +34,11 @@ func NewSplash() *Splash {
 		strings.Repeat("\n", 2),
 		logoText)
 
-	s.AddItem(logo, 0, 1, false)
+	s.root.AddItem(logo, 0, 1, false)
 
-	return &s
+	return s
 }
+
+func (p *SplashPage) GetName() string { return "splash" }
+
+func (p *SplashPage) GetPrimitive() tview.Primitive { return p.root }

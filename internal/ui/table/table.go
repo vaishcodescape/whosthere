@@ -1,4 +1,4 @@
-package ui
+package table
 
 import (
 	"fmt"
@@ -40,6 +40,22 @@ func (dt *DeviceTable) Upsert(d discovery.Device) {
 		dt.devices[key] = existing
 	} else {
 		dt.devices[key] = d
+	}
+	dt.refresh()
+}
+
+// Refresh forces a full redraw; kept for external callers like MainPage.
+func (dt *DeviceTable) Refresh() { dt.refresh() }
+
+// ReplaceAll clears the table and replaces its contents with the
+// provided devices slice.
+func (dt *DeviceTable) ReplaceAll(list []discovery.Device) {
+	dt.devices = make(map[string]discovery.Device, len(list))
+	for _, d := range list {
+		if d.IP == nil || d.IP.String() == "" {
+			continue
+		}
+		dt.devices[d.IP.String()] = d
 	}
 	dt.refresh()
 }

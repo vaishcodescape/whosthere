@@ -9,36 +9,42 @@ import (
 	"github.com/ramonvermeulen/whosthere/internal/config"
 	"github.com/ramonvermeulen/whosthere/internal/discovery"
 	"github.com/ramonvermeulen/whosthere/internal/discovery/ssdp"
-	"github.com/ramonvermeulen/whosthere/internal/ui/components"
+	"github.com/ramonvermeulen/whosthere/internal/state"
+	"github.com/ramonvermeulen/whosthere/internal/ui/views"
 )
 
 type App struct {
 	*tview.Application
-	Main        *Pages
-	cfg         *config.Config
-	deviceTable *DeviceTable
-	engine      *discovery.Engine
-	spinner     *components.Spinner
-	rescanEvery time.Duration
+
+	cfg    *config.Config
+	router *Router
+	engine *discovery.Engine
+	state  *state.AppState
 }
 
 func NewApp(cfg *config.Config) *App {
-	a := App{
+	a := &App{
 		Application: tview.NewApplication(),
-		Main:        NewPages(),
 		cfg:         cfg,
-		deviceTable: NewDeviceTable(),
+		router:      NewRouter(),
 		engine:      &discovery.Engine{Scanners: []discovery.Scanner{&ssdp.Scanner{}}, Timeout: 6 * time.Second},
-		spinner:     components.NewSpinner(),
-		rescanEvery: 10 * time.Second,
+		state:       state.NewAppState(),
 	}
-	a.layout()
+
+	mainPage := views.NewMainPage(a.state)
+	splashPage := views.NewSplashPage()
+
+	a.router.Register(mainPage)
+	a.router.Register(splashPage)
+
 	if a.cfg != nil && a.cfg.Splash.Enabled {
-		a.Main.SwitchToPage("splash")
+		a.router.NavigateTo("splash")
 	} else {
-		a.Main.SwitchToPage("main")
+		a.router.NavigateTo("main")
 	}
-	return &a
+
+	a.SetRoot(a.router, true)
+	return a
 }
 
 func (a *App) Run() error {
@@ -48,7 +54,7 @@ func (a *App) Run() error {
 			timer := time.NewTimer(time.Duration(ms) * time.Millisecond)
 			<-timer.C
 			a.QueueUpdateDraw(func() {
-				a.Main.SwitchToPage("main")
+				a.router.NavigateTo("main")
 			})
 			a.startDiscoveryLoop()
 		}(a.cfg.Splash.Delay)
@@ -63,32 +69,23 @@ func (a *App) startDiscoveryLoop() {
 
 	go func() {
 		for {
-			a.spinner.Start(queue)
+			mp, _ := a.router.Page("main").(*views.MainPage)
+			if mp == nil {
+				return
+			}
+
+			mp.Spinner().Start(queue)
 
 			ctx := context.Background()
 			_, _ = a.engine.Stream(ctx, func(d discovery.Device) {
-				a.QueueUpdateDraw(func() { a.deviceTable.Upsert(d) })
+				a.state.UpsertDevice(d)
+				a.QueueUpdateDraw(func() { mp.RefreshFromState() })
 			})
 
-			a.spinner.Stop(queue)
-			a.QueueUpdateDraw(func() { a.deviceTable.refresh() })
+			mp.Spinner().Stop(queue)
+			a.QueueUpdateDraw(func() { mp.RefreshFromState() })
 
-			time.Sleep(a.rescanEvery)
+			time.Sleep(10 * time.Second)
 		}
 	}()
-}
-
-func (a *App) layout() {
-	main := tview.NewFlex().SetDirection(tview.FlexRow)
-	main.AddItem(tview.NewTextView().SetText("whosthere").SetTextAlign(tview.AlignCenter), 0, 1, false)
-	main.AddItem(a.deviceTable, 0, 18, true)
-
-	status := tview.NewFlex().SetDirection(tview.FlexColumn)
-	status.AddItem(a.spinner.View(), 0, 1, false)
-	status.AddItem(tview.NewTextView().SetText("jK up/down - gG top/bottom").SetTextAlign(tview.AlignRight), 0, 1, false)
-	main.AddItem(status, 1, 0, false)
-
-	a.Main.AddPage("main", main, true, false)
-	a.Main.AddPage("splash", NewSplash(), true, true)
-	a.SetRoot(a.Main, true)
 }
