@@ -6,8 +6,8 @@ import (
 	"github.com/ramonvermeulen/whosthere/internal/ui/components"
 )
 
-// MainPage is the dashboard showing discovered devices.
-type MainPage struct {
+// DashboardPage is the dashboard showing discovered devices.
+type DashboardPage struct {
 	root        *tview.Flex
 	deviceTable *components.DeviceTable
 	spinner     *components.Spinner
@@ -16,12 +16,31 @@ type MainPage struct {
 	onShowDetails func()
 }
 
-func NewMainPage(s *state.AppState, onShowDetails func()) *MainPage {
+func NewDashboardPage(s *state.AppState, onShowDetails func()) *DashboardPage {
 	t := components.NewDeviceTable()
 	spinner := components.NewSpinner()
 
-	mp := &MainPage{
-		root:          nil, // set below
+	main := tview.NewFlex().SetDirection(tview.FlexRow)
+	main.AddItem(
+		tview.NewTextView().
+			SetText("whosthere").
+			SetTextAlign(tview.AlignCenter),
+		0, 1, false,
+	)
+	main.AddItem(t, 0, 18, true)
+
+	status := tview.NewFlex().SetDirection(tview.FlexColumn)
+	status.AddItem(spinner.View(), 0, 1, false)
+	status.AddItem(
+		tview.NewTextView().
+			SetText("j/k: up/down  g/G: top/bottom  Enter: details").
+			SetTextAlign(tview.AlignRight),
+		0, 1, false,
+	)
+	main.AddItem(status, 1, 0, false)
+
+	dp := &DashboardPage{
+		root:          main,
 		deviceTable:   t,
 		spinner:       spinner,
 		state:         s,
@@ -29,36 +48,26 @@ func NewMainPage(s *state.AppState, onShowDetails func()) *MainPage {
 	}
 
 	t.SetSelectedFunc(func(row, col int) {
-		ip := mp.deviceTable.SelectedIP()
-		if ip == "" || mp.onShowDetails == nil {
+		ip := t.SelectedIP()
+		if ip == "" || onShowDetails == nil {
 			return
 		}
-		mp.state.SetSelectedIP(ip)
-		mp.onShowDetails()
+		s.SetSelectedIP(ip)
+		onShowDetails()
 	})
 
-	main := tview.NewFlex().SetDirection(tview.FlexRow)
-	main.AddItem(tview.NewTextView().SetText("whosthere").SetTextAlign(tview.AlignCenter), 0, 1, false)
-	main.AddItem(t, 0, 18, true)
-
-	status := tview.NewFlex().SetDirection(tview.FlexColumn)
-	status.AddItem(mp.spinner.View(), 0, 1, false)
-	status.AddItem(tview.NewTextView().SetText("j/k: up/down  g/G: top/bottom  Enter: details").SetTextAlign(tview.AlignRight), 0, 1, false)
-	main.AddItem(status, 1, 0, false)
-
-	mp.root = main
-	return mp
+	return dp
 }
 
-func (p *MainPage) GetName() string { return "main" }
+func (p *DashboardPage) GetName() string { return "main" }
 
-func (p *MainPage) GetPrimitive() tview.Primitive { return p.root }
+func (p *DashboardPage) GetPrimitive() tview.Primitive { return p.root }
 
-func (p *MainPage) FocusTarget() tview.Primitive { return p.deviceTable }
+func (p *DashboardPage) FocusTarget() tview.Primitive { return p.deviceTable }
 
-func (p *MainPage) Spinner() *components.Spinner { return p.spinner }
+func (p *DashboardPage) Spinner() *components.Spinner { return p.spinner }
 
-func (p *MainPage) RefreshFromState() {
+func (p *DashboardPage) RefreshFromState() {
 	devices := p.state.DevicesSnapshot()
 	p.deviceTable.ReplaceAll(devices)
 }

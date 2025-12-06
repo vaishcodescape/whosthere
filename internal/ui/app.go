@@ -11,6 +11,7 @@ import (
 	"github.com/ramonvermeulen/whosthere/internal/discovery/ssdp"
 	"github.com/ramonvermeulen/whosthere/internal/state"
 	"github.com/ramonvermeulen/whosthere/internal/ui/pages"
+	"github.com/ramonvermeulen/whosthere/internal/ui/theme"
 )
 
 type App struct {
@@ -23,6 +24,10 @@ type App struct {
 }
 
 func NewApp(cfg *config.Config) *App {
+	if cfg != nil {
+		_ = theme.FromConfig(cfg.Theme)
+	}
+
 	a := &App{
 		Application: tview.NewApplication(),
 		cfg:         cfg,
@@ -34,7 +39,7 @@ func NewApp(cfg *config.Config) *App {
 	detailPage := pages.NewDetailPage(a.state, func() {
 		a.router.NavigateTo(RouteMain)
 	})
-	mainPage := pages.NewMainPage(a.state, func() {
+	mainPage := pages.NewDashboardPage(a.state, func() {
 		if dp, ok := a.router.Page(RouteDetail).(*pages.DetailPage); ok {
 			dp.Refresh()
 		}
@@ -53,7 +58,6 @@ func NewApp(cfg *config.Config) *App {
 	}
 
 	a.SetRoot(a.router, true)
-	// Ensure focus is on the active page's focus target (e.g., the device table on main page).
 	a.router.FocusCurrent(a.Application)
 
 	return a
@@ -67,7 +71,6 @@ func (a *App) Run() error {
 			<-timer.C
 			a.QueueUpdateDraw(func() {
 				a.router.NavigateTo(RouteMain)
-				// After navigating away from the splash, focus the main page's focus target (device table).
 				a.router.FocusCurrent(a.Application)
 			})
 			a.startDiscoveryLoop()
@@ -83,7 +86,7 @@ func (a *App) startDiscoveryLoop() {
 
 	go func() {
 		for {
-			mp, _ := a.router.Page(RouteMain).(*pages.MainPage)
+			mp, _ := a.router.Page(RouteMain).(*pages.DashboardPage)
 			if mp == nil {
 				return
 			}

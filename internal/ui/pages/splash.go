@@ -14,6 +14,9 @@ var LogoBig = []string{
 	`      \ \ /\ / / '_ \ / _ \/ __| __| '_ \ / _ \ '__/ _ \// /      `,
 	`       \ V  V /| | | | (_) \__ \ |_| | | |  __/ | |  __/ \/       `,
 	`        \_/\_/ |_| |_|\___/|___/\__|_| |_|\___|_|  \___| ()       `,
+	"\n",
+	"\n",
+	"\n",
 }
 
 // SplashPage adapts the splash logo into a Page.
@@ -22,19 +25,28 @@ type SplashPage struct {
 }
 
 func NewSplashPage() *SplashPage {
-	s := &SplashPage{root: tview.NewFlex()}
+	s := &SplashPage{root: tview.NewFlex().SetDirection(tview.FlexRow)}
 
 	logo := tview.NewTextView()
 	logo.SetDynamicColors(true)
 	logo.SetTextAlign(tview.AlignCenter)
+	logo.SetTextColor(tview.Styles.SecondaryTextColor)
 
-	// TODO(ramon): fix styles via injectable style configuration
-	logoText := strings.Join(LogoBig, "\n[green::b]")
-	_, _ = fmt.Fprintf(logo, "%s[green::b]%s\n",
-		strings.Repeat("\n", 2),
-		logoText)
+	logoText := strings.Join(LogoBig, "\n")
+	_, err := fmt.Fprint(logo, logoText)
+	if err != nil {
+		return nil
+	}
 
-	s.root.AddItem(logo, 0, 1, false)
+	logoLines := len(strings.Split(logoText, "\n"))
+
+	centered := tview.NewFlex().
+		SetDirection(tview.FlexRow).
+		AddItem(nil, 0, 1, false).
+		AddItem(logo, logoLines, 0, false).
+		AddItem(nil, 0, 1, false)
+
+	s.root.AddItem(centered, 0, 1, false)
 
 	return s
 }
