@@ -18,13 +18,18 @@ import (
 	"go.uber.org/zap"
 )
 
+// see https://pkg.go.dev/embed
+// this will embed the oui.csv file while compiling the binary
+//
 //go:embed oui.csv
 var embeddedOUIDB []byte
 
 const (
-	updateURL     = "https://standards-oui.ieee.org/oui/oui.csv"
-	maxAge        = 30 * 24 * time.Hour
-	clientTimeout = 30 * time.Second
+	updateURL       = "https://standards-oui.ieee.org/oui/oui.csv"
+	maxAge          = 30 * 24 * time.Hour
+	clientTimeout   = 30 * time.Second
+	userAgentHeader = "whosthere/1.0 (+https://github.com/ramonvermeulen/whosthere)"
+	acceptHeader    = "text/csv,application/vnd.ms-excel;q=0.9,*/*;q=0.8"
 )
 
 type Registry struct {
@@ -104,8 +109,11 @@ func (reg *Registry) Refresh(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	req.Header.Set("User-Agent", userAgentHeader)
+	req.Header.Set("Accept", acceptHeader)
 
-	resp, err := http.DefaultClient.Do(req)
+	client := &http.Client{Timeout: clientTimeout}
+	resp, err := client.Do(req)
 	if err != nil {
 		return err
 	}

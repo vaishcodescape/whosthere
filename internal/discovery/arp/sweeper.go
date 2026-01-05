@@ -22,6 +22,11 @@ var (
 )
 
 // Sweeper triggers ARP resolution to populate the OS ARP cache.
+// Because whosthere is designed to not run with elevated privileges,
+// it cannot send ARP requests directly. Instead, it triggers ARP resolution
+// by sending UDP/TCP packets to IPs in the target subnet. This causes the OS
+// to send ARP requests for those IPs, populating the ARP cache which can
+// then be read by the ARP scanner.
 type Sweeper interface {
 	Start(ctx context.Context)
 	Trigger(subnet *net.IPNet)
