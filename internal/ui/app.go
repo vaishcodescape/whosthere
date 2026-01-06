@@ -2,7 +2,6 @@ package ui
 
 import (
 	"context"
-	"math"
 	"time"
 
 	"github.com/derailed/tview"
@@ -43,10 +42,15 @@ func NewApp(cfg *config.Config, ouiDB *oui.Registry) *App {
 	}
 	_ = theme.FromConfig(themeCfg)
 	sweeper := arp.NewSweeper(5*time.Minute, time.Minute)
-	scanners := []discovery.Scanner{
-		&ssdp.Scanner{},
-		arp.NewScanner(sweeper),
-		&mdns.Scanner{},
+	scanners := []discovery.Scanner{}
+	if cfg.Scanners.SSDP.Enabled {
+		scanners = append(scanners, &ssdp.Scanner{})
+	}
+	if cfg.Scanners.ARP.Enabled {
+		scanners = append(scanners, arp.NewScanner(sweeper))
+	}
+	if cfg.Scanners.MDNS.Enabled {
+		scanners = append(scanners, &mdns.Scanner{})
 	}
 	engine := discovery.NewEngine(
 		scanners,
@@ -85,9 +89,8 @@ func NewApp(cfg *config.Config, ouiDB *oui.Registry) *App {
 
 func (a *App) Run() error {
 	if a.cfg != nil && a.cfg.Splash.Enabled {
-		go func(delaySeconds float32) {
-			ms := int64(math.Round(float64(delaySeconds) * 1000.0))
-			time.Sleep(time.Duration(ms) * time.Millisecond)
+		go func(delay time.Duration) {
+			time.Sleep(delay)
 			a.QueueUpdateDraw(func() {
 				a.router.NavigateTo(navigation.RouteDashboard)
 				a.router.FocusCurrent(a.Application)

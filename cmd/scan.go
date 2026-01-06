@@ -30,6 +30,7 @@ Examples:
 	RunE: func(cmd *cobra.Command, args []string) error {
 		scannerNames, _ := cmd.Flags().GetString("scanner")
 		timeoutSec, _ := cmd.Flags().GetInt("timeout")
+		scanDuration := time.Duration(timeoutSec) * time.Second
 
 		level := logging.LevelFromEnv(zapcore.InfoLevel)
 		_, _, err := logging.Init("whosthere-scan", level, true)
@@ -69,9 +70,9 @@ Examples:
 			return fmt.Errorf("no scanners selected")
 		}
 
-		eng := discovery.NewEngine(scList, discovery.WithTimeout(time.Duration(timeoutSec)*time.Second), discovery.WithOUIRegistry(ouiDB), discovery.WithSubnetHook(sweeper.Trigger))
+		eng := discovery.NewEngine(scList, discovery.WithTimeout(scanDuration), discovery.WithOUIRegistry(ouiDB))
 
-		ctx, cancel := context.WithTimeout(ctx, time.Duration(timeoutSec)*time.Second)
+		ctx, cancel := context.WithTimeout(ctx, scanDuration)
 		defer cancel()
 
 		devices, err := eng.Stream(ctx, func(d discovery.Device) {

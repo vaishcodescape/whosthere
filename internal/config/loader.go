@@ -17,6 +17,8 @@ const (
 	configEnvVar = "WHOSTHERE_CONFIG"
 )
 
+var ErrConfigNil = errors.New("config is nil")
+
 // Load resolves the config path, reads/creates YAML, and returns the merged config.
 func Load(pathOverride string) (*Config, error) {
 	resolvedPath, err := resolveConfigPath(pathOverride)
@@ -39,8 +41,8 @@ func Load(pathOverride string) (*Config, error) {
 		return cfg, fmt.Errorf("parse config: %w", err)
 	}
 
-	if cfg.Splash.Delay < 0 {
-		cfg.Splash.Delay = DefaultSplashDelay
+	if err := validateAndNormalize(cfg); err != nil {
+		return cfg, fmt.Errorf("validate config: %w", err)
 	}
 
 	return cfg, nil
@@ -85,4 +87,12 @@ func resolveConfigPath(pathOverride string) (string, error) {
 	}
 
 	return filepath.Join(dir, defaultConfigFileName), nil
+}
+
+func validateAndNormalize(cfg *Config) error {
+	if cfg == nil {
+		return ErrConfigNil
+	}
+
+	return cfg.validateAndNormalize()
 }

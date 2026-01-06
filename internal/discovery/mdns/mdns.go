@@ -261,6 +261,9 @@ func (ss *scanSession) parseTXTRecords(txt *dnsmessage.TXTResource, device *disc
 				device.Manufacturer = value
 			case "mac":
 				device.MAC = value
+			// todo(ramon): think about device merge strategy, often `md` is a better display name, however at this point often other scanners have already set a name
+			case "md":
+				device.DisplayName = value
 			default:
 				if device.ExtraData == nil {
 					device.ExtraData = make(map[string]string)

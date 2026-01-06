@@ -67,9 +67,11 @@ or the `WHOSTHERE_CONFIG` environment variable.
 Here is an example configuration file with all available options and their default values:
 
 ```yaml
+scan_interval: 20s # how often a scan gets triggered
+scan_duration: 10s # maximum duration of a scan
 splash:
   enabled: true # show splash screen on startup
-  delay: 1      # delay in seconds for the splash screen
+  delay: 1s     # delay for the splash screen
 theme:
   # maps 1:1 to tview.Theme https://github.com/rivo/tview/blob/master/styles.go#L6
   primitive_background_color: "#000a1a"
