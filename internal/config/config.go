@@ -12,11 +12,14 @@ const (
 
 	DefaultScanInterval = 20 * time.Second
 	DefaultScanDuration = 10 * time.Second
+
+	DefaultThemeName = "default"
+	CustomThemeName  = "custom"
 )
 
-// ThemeConfig mirrors tview.Theme; all fields are optional strings that
-// override the tview.Theme defaults when set.
+// ThemeConfig selects a theme by name and optionally carries custom color overrides.
 type ThemeConfig struct {
+	Name                        string `yaml:"name"`
 	PrimitiveBackgroundColor    string `yaml:"primitive_background_color"`
 	ContrastBackgroundColor     string `yaml:"contrast_background_color"`
 	MoreContrastBackgroundColor string `yaml:"more_contrast_background_color"`
@@ -57,6 +60,11 @@ type ScannerToggle struct {
 	Enabled bool `yaml:"enabled"`
 }
 
+// DefaultThemeConfig returns the built-in default theme selection.
+func DefaultThemeConfig() ThemeConfig {
+	return ThemeConfig{Name: DefaultThemeName}
+}
+
 // DefaultConfig builds a Config pre-populated with baked-in defaults.
 func DefaultConfig() *Config {
 	return &Config{
@@ -66,24 +74,8 @@ func DefaultConfig() *Config {
 			Enabled: DefaultSplashEnabled,
 			Delay:   DefaultSplashDelay,
 		},
-		Theme: ThemeConfig{
-			PrimitiveBackgroundColor:    "#000a1a",
-			ContrastBackgroundColor:     "#001a33",
-			MoreContrastBackgroundColor: "#003366",
-			BorderColor:                 "#0088ff",
-			TitleColor:                  "#00ffff",
-			GraphicsColor:               "#00ffaa",
-			PrimaryTextColor:            "#cceeff",
-			SecondaryTextColor:          "#6699ff",
-			TertiaryTextColor:           "#ffaa00",
-			InverseTextColor:            "#000a1a",
-			ContrastSecondaryTextColor:  "#88ddff",
-		},
-		Scanners: ScannerConfig{
-			MDNS: ScannerToggle{Enabled: true},
-			SSDP: ScannerToggle{Enabled: true},
-			ARP:  ScannerToggle{Enabled: true},
-		},
+		Theme:    DefaultThemeConfig(),
+		Scanners: ScannerConfig{MDNS: ScannerToggle{Enabled: true}, SSDP: ScannerToggle{Enabled: true}, ARP: ScannerToggle{Enabled: true}},
 	}
 }
 
@@ -120,6 +112,10 @@ func (c *Config) validateAndNormalize() error {
 
 	if len(errs) > 0 {
 		return errors.New(strings.Join(errs, "; "))
+	}
+
+	if strings.TrimSpace(c.Theme.Name) == "" {
+		c.Theme.Name = DefaultThemeName
 	}
 
 	return nil

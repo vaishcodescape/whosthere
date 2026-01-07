@@ -40,7 +40,7 @@ func NewApp(cfg *config.Config, ouiDB *oui.Registry) *App {
 	if cfg != nil {
 		themeCfg = &cfg.Theme
 	}
-	_ = theme.FromConfig(themeCfg)
+	_ = theme.Resolve(themeCfg)
 	sweeper := arp.NewSweeper(5*time.Minute, time.Minute)
 	scanners := []discovery.Scanner{}
 	if cfg.Scanners.SSDP.Enabled {
