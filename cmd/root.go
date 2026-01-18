@@ -9,8 +9,8 @@ import (
 	"github.com/ramonvermeulen/whosthere/internal/core/config"
 	"github.com/ramonvermeulen/whosthere/internal/core/logging"
 	"github.com/ramonvermeulen/whosthere/internal/core/oui"
+	"github.com/ramonvermeulen/whosthere/internal/core/version"
 	"github.com/ramonvermeulen/whosthere/internal/ui"
-	"github.com/ramonvermeulen/whosthere/internal/version"
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -103,6 +103,6 @@ func initWhosthereFlags() {
 		&whosthereFlags.PprofPort,
 		"pprof-port",
 		"",
-		"Port for pprof HTTP server for debugging/profiling purposes (e.g., 6060)",
+		"Port for pprof HTTP server for debugging and profiling purposes (e.g., 6060)",
 	)
 }
