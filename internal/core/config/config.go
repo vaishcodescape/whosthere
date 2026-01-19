@@ -2,6 +2,7 @@ package config
 
 import (
 	"errors"
+	"net"
 	"strings"
 	"time"
 )
@@ -62,12 +63,13 @@ type ScannerToggle struct {
 
 // Config captures all configurable parameters for the application.
 type Config struct {
-	ScanInterval time.Duration     `yaml:"scan_interval"`
-	ScanDuration time.Duration     `yaml:"scan_duration"`
-	Splash       SplashConfig      `yaml:"splash"`
-	Theme        ThemeConfig       `yaml:"theme"`
-	Scanners     ScannerConfig     `yaml:"scanners"`
-	PortScanner  PortScannerConfig `yaml:"port_scanner"`
+	ScanInterval     time.Duration     `yaml:"scan_interval"`
+	ScanDuration     time.Duration     `yaml:"scan_duration"`
+	Splash           SplashConfig      `yaml:"splash"`
+	Theme            ThemeConfig       `yaml:"theme"`
+	Scanners         ScannerConfig     `yaml:"scanners"`
+	PortScanner      PortScannerConfig `yaml:"port_scanner"`
+	NetworkInterface string            `yaml:"network_interface"`
 }
 
 // DefaultConfig builds a Config pre-populated with baked-in defaults.
@@ -124,12 +126,18 @@ func (c *Config) validateAndNormalize() error {
 		c.PortScanner.Timeout = DefaultPortScanTimeout
 	}
 
-	if len(errs) > 0 {
-		return errors.New(strings.Join(errs, "; "))
-	}
-
 	if strings.TrimSpace(c.Theme.Name) == "" {
 		c.Theme.Name = DefaultThemeName
+	}
+
+	if c.NetworkInterface != "" {
+		if _, err := net.InterfaceByName(c.NetworkInterface); err != nil {
+			errs = append(errs, "network_interface does not exist: "+c.NetworkInterface)
+		}
+	}
+
+	if len(errs) > 0 {
+		return errors.New(strings.Join(errs, "; "))
 	}
 
 	return nil

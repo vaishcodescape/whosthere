@@ -2,6 +2,7 @@ package arp
 
 import (
 	"context"
+	"time"
 
 	"github.com/ramonvermeulen/whosthere/internal/core/discovery"
 	"go.uber.org/zap"
@@ -30,8 +31,11 @@ func (s *Scanner) Scan(ctx context.Context, out chan<- discovery.Device) error {
 	}
 
 	if s.Sweeper != nil {
+		// this feels awkward
 		s.Sweeper.Start(ctx)
 	}
+
+	time.Sleep(1 * time.Second)
 
 	return s.readARPCache(ctx, out)
 }

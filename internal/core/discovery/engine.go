@@ -110,35 +110,39 @@ func (e *Engine) Stream(ctx context.Context, onDevice func(Device)) ([]Device, e
 				// channel closed, all scanners are done
 				return mapToSlice(devices), nil
 			}
-			if d.IP == nil || d.IP.String() == "" {
-				// skip devices with no IP
-				continue
+			e.handleDevice(d, devices, onDevice)
+		}
+	}
+}
+
+// handleDevice processes a discovered device, merging with existing or adding new.
+func (e *Engine) handleDevice(d Device, devices map[string]*Device, onDevice func(Device)) {
+	if d.IP == nil || d.IP.String() == "" {
+		return
+	}
+	if e.OnSubnet != nil {
+		if sn := ipv4Subnet24(d.IP); sn != nil {
+			if e.Subnets == nil || e.Subnets.Add(sn) {
+				e.OnSubnet(sn)
 			}
-			if e.OnSubnet != nil {
-				if sn := ipv4Subnet24(d.IP); sn != nil {
-					if e.Subnets == nil || e.Subnets.Add(sn) {
-						e.OnSubnet(sn)
-					}
-				}
-			}
-			key := d.IP.String()
-			if existing, found := devices[key]; found {
-				existing.Merge(&d)
-				e.fillManufacturerIfEmpty(existing)
-				if onDevice != nil {
-					onDevice(*existing)
-				}
-			} else {
-				dev := d
-				if dev.FirstSeen.IsZero() {
-					dev.FirstSeen = time.Now()
-				}
-				e.fillManufacturerIfEmpty(&dev)
-				devices[key] = &dev
-				if onDevice != nil {
-					onDevice(dev)
-				}
-			}
+		}
+	}
+	key := d.IP.String()
+	if existing, found := devices[key]; found {
+		existing.Merge(&d)
+		e.fillManufacturerIfEmpty(existing)
+		if onDevice != nil {
+			onDevice(*existing)
+		}
+	} else {
+		dev := d
+		if dev.FirstSeen.IsZero() {
+			dev.FirstSeen = time.Now()
+		}
+		e.fillManufacturerIfEmpty(&dev)
+		devices[key] = &dev
+		if onDevice != nil {
+			onDevice(dev)
 		}
 	}
 }
