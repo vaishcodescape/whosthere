@@ -7,6 +7,8 @@ Discover, explore, and understand your Local Area Network in an intuitive way. I
 **privilege-less, concurrent scans** using ARP, multicast DNS, and TCP/UDP connections to
 quickly find and identify devices on your Local Area Network.
 
+![demo gif](.github/assets/demo.gif)
+
 ## Features
 
 - **Modern TUI:** Navigate and explore discovered devices intuitively.
@@ -17,10 +19,6 @@ quickly find and identify devices on your Local Area Network.
 - **Pluggable Architecture:** Extensible with custom scanners.
 - **Daemon Mode with HTTP API:** Run in the background and integrate with other tools.
 - **Theming & Configuration:** Personalize the look and behavior via YAML configuration.
-
-Knock knock.. Who's there? 🚪
-
-![demo gif](<>)
 
 ## Installation
 
