@@ -124,7 +124,7 @@ func (s *Sweeper) runSweep(ctx context.Context, subnet *net.IPNet, localIP net.I
 		return
 	}
 
-	s.logger.Info("Triggering ARP requests for subnet", zap.String("subnet", subnet.String()))
+	s.logger.Debug("Triggering ARP requests for subnet", zap.String("subnet", subnet.Mask.String()))
 	triggerSubnetSweep(ctx, ips)
 	s.logger.Debug("ARP triggering completed", zap.String("subnet", subnet.String()))
 }

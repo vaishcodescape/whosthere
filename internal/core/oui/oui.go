@@ -81,7 +81,7 @@ func Init(ctx context.Context) (*Registry, error) {
 	entryCount := len(reg.prefixMap)
 	loadedAt := reg.loadedAt
 	reg.mu.RUnlock()
-	logger.Info("OUI: registry initialized", zap.Int("entries", entryCount), zap.String("path", path), zap.Time("loaded_at", loadedAt))
+	logger.Debug("OUI: registry initialized", zap.Int("entries", entryCount), zap.String("path", path), zap.Time("loaded_at", loadedAt))
 
 	age := time.Since(loadedAt)
 	if age > maxAge {
