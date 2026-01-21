@@ -2,14 +2,13 @@ package ui
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/gdamore/tcell/v2"
+	"github.com/ramonvermeulen/whosthere/internal/core"
 	"github.com/ramonvermeulen/whosthere/internal/core/config"
 	"github.com/ramonvermeulen/whosthere/internal/core/discovery"
-	"github.com/ramonvermeulen/whosthere/internal/core/discovery/arp"
-	"github.com/ramonvermeulen/whosthere/internal/core/discovery/mdns"
-	"github.com/ramonvermeulen/whosthere/internal/core/discovery/ssdp"
 	"github.com/ramonvermeulen/whosthere/internal/core/oui"
 	"github.com/ramonvermeulen/whosthere/internal/core/state"
 	"github.com/ramonvermeulen/whosthere/internal/ui/events"
@@ -24,6 +23,7 @@ const (
 	refreshInterval = 1 * time.Second
 )
 
+// App represents the main TUI application.
 type App struct {
 	*tview.Application
 	pages         *tview.Pages
@@ -36,9 +36,14 @@ type App struct {
 	events        chan events.Event
 	emit          func(events.Event)
 	portScanner   *discovery.PortScanner
+	isReady       bool
 }
 
-func NewApp(cfg *config.Config, ouiDB *oui.Registry, version string) *App {
+func NewApp(cfg *config.Config, ouiDB *oui.Registry, version string) (*App, error) {
+	if cfg == nil {
+		return nil, fmt.Errorf("config cannot be nil")
+	}
+
 	app := tview.NewApplication()
 	appState := state.NewAppState(cfg, version)
 
@@ -47,7 +52,6 @@ func NewApp(cfg *config.Config, ouiDB *oui.Registry, version string) *App {
 		state:       appState,
 		cfg:         cfg,
 		events:      make(chan events.Event, 100),
-		portScanner: discovery.NewPortScanner(100),
 	}
 
 	a.emit = func(e events.Event) {
@@ -55,20 +59,20 @@ func NewApp(cfg *config.Config, ouiDB *oui.Registry, version string) *App {
 	}
 	a.pages = tview.NewPages()
 
-	theme.SetRegisterFunc(a.RegisterPrimitive)
+	theme.SetRegisterFunc(a.RegisterThemeAwarePrimitive)
 
 	a.applyTheme(appState.CurrentTheme())
 	a.setupPages(cfg)
-
-	if cfg != nil {
-		a.setupEngine(cfg, ouiDB)
+	err := a.setupEngine(cfg, ouiDB)
+	if err != nil {
+		return nil, fmt.Errorf("failed to setup engine: %w", err)
 	}
 
 	app.SetRoot(a.pages, true)
 	app.SetInputCapture(a.handleGlobalKeys)
 	app.EnableMouse(true)
 
-	return a
+	return a, nil
 }
 
 func (a *App) Run() error {
@@ -85,7 +89,10 @@ func (a *App) Run() error {
 			}()
 			time.Sleep(delay)
 			a.emit(events.NavigateTo{Route: routes.RouteDashboard})
+			a.isReady = true
 		}(a.cfg.Splash.Delay)
+	} else {
+		a.isReady = true
 	}
 
 	if a.engine != nil && a.cfg != nil {
@@ -115,29 +122,25 @@ func (a *App) setupPages(cfg *config.Config) {
 	a.pages.SwitchToPage(initialPage)
 }
 
-func (a *App) setupEngine(cfg *config.Config, ouiDB *oui.Registry) {
-	sweeper := arp.NewSweeper(5*time.Minute, time.Minute)
-	var scanners []discovery.Scanner
-
-	if cfg.Scanners.SSDP.Enabled {
-		scanners = append(scanners, &ssdp.Scanner{})
-	}
-	if cfg.Scanners.ARP.Enabled {
-		scanners = append(scanners, arp.NewScanner(sweeper))
-	}
-	if cfg.Scanners.MDNS.Enabled {
-		scanners = append(scanners, &mdns.Scanner{})
+// methods like this can be re-used for other commands
+func (a *App) setupEngine(cfg *config.Config, ouiDB *oui.Registry) error {
+	iface, err := discovery.NewInterfaceInfo(cfg.NetworkInterface)
+	if err != nil {
+		return fmt.Errorf("failed to get network interface: %w", err)
 	}
 
-	a.engine = discovery.NewEngine(
-		scanners,
-		discovery.WithTimeout(cfg.ScanDuration),
-		discovery.WithOUIRegistry(ouiDB),
-		discovery.WithSubnetHook(sweeper.Trigger),
-	)
+	a.portScanner = discovery.NewPortScanner(100, iface)
+
+	a.engine = core.BuildEngine(iface, ouiDB, core.GetEnabledFromCfg(cfg), cfg.ScanDuration)
+
+	return nil
 }
 
 func (a *App) handleGlobalKeys(event *tcell.EventKey) *tcell.EventKey {
+	// if the app isn't fully started, but it can already listen to key events this can cause a UI bug
+	if !a.isReady {
+		return event
+	}
 	switch event.Key() {
 	case tcell.KeyCtrlT:
 		a.emit(events.NavigateTo{Route: routes.RouteThemePicker, Overlay: true})
@@ -193,16 +196,16 @@ func (a *App) performScan() {
 	a.emit(events.DiscoveryStarted{})
 
 	ctx, cancel := context.WithTimeout(context.Background(), a.cfg.ScanDuration)
-	_, _ = a.engine.Stream(ctx, func(d discovery.Device) {
-		a.state.UpsertDevice(&d)
+	_, _ = a.engine.Stream(ctx, func(d *discovery.Device) {
+		a.state.UpsertDevice(d)
 	})
 	cancel()
 
 	a.emit(events.DiscoveryStopped{})
 }
 
-// RegisterPrimitive registers a primitive for theme updates.
-func (a *App) RegisterPrimitive(p tview.Primitive) {
+// RegisterThemeAwarePrimitive registers a primitive for theme updates.
+func (a *App) RegisterThemeAwarePrimitive(p tview.Primitive) {
 	a.primitives = append(a.primitives, p)
 }
 

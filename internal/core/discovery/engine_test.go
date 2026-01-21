@@ -70,7 +70,7 @@ func TestEngineStreamMergeAndDedup(t *testing.T) {
 
 	var got []Device
 	ctx := context.Background()
-	devices, err := eng.Stream(ctx, func(d Device) { got = append(got, d) })
+	devices, err := eng.Stream(ctx, func(d *Device) { got = append(got, *d) })
 	if err != nil {
 		t.Fatalf("Stream returned error: %v", err)
 	}
@@ -113,33 +113,6 @@ func TestEngineStreamMergeAndDedup(t *testing.T) {
 
 	if len(got) != 2 {
 		t.Fatalf("callback expected 2 calls (insert+merge), got %d", len(got))
-	}
-}
-
-func TestEngineOnSubnetCalledPerSubnet(t *testing.T) {
-	devs1 := []Device{
-		{IP: net.ParseIP("10.0.1.10")},
-		{IP: net.ParseIP("10.0.1.20")},
-	}
-	devs2 := []Device{{IP: net.ParseIP("10.0.2.5")}}
-	devs3 := []Device{{IP: net.ParseIP("10.0.6.142")}}
-
-	scanners := []Scanner{
-		&fakeScanner{name: "a", devices: devs1},
-		&fakeScanner{name: "b", devices: devs2},
-		&fakeScanner{name: "c", devices: devs3},
-	}
-
-	var subnetCalls int
-	eng := NewEngine(scanners, WithTimeout(time.Second), WithSubnetHook(func(_ *net.IPNet) { subnetCalls++ }))
-
-	ctx := context.Background()
-	if _, err := eng.Stream(ctx, nil); err != nil {
-		t.Fatalf("Stream error: %v", err)
-	}
-
-	if subnetCalls != 3 {
-		t.Fatalf("expected 3 subnet calls (three /24s), got %d", subnetCalls)
 	}
 }
 

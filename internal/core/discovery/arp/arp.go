@@ -2,6 +2,7 @@ package arp
 
 import (
 	"context"
+	"time"
 
 	"github.com/ramonvermeulen/whosthere/internal/core/discovery"
 	"go.uber.org/zap"
@@ -12,13 +13,14 @@ var _ discovery.Scanner = (*Scanner)(nil)
 // Scanner implements ARP-based discovery by reading the ARP cache.
 // Optional Sweeper can populate the cache in the background.
 type Scanner struct {
-	Sweeper Sweeper
+	iface   *discovery.InterfaceInfo
+	Sweeper *Sweeper
 
 	logger *zap.Logger
 }
 
-func NewScanner(sweeper Sweeper) *Scanner {
-	return &Scanner{Sweeper: sweeper}
+func NewScanner(iface *discovery.InterfaceInfo, sweeper *Sweeper) *Scanner {
+	return &Scanner{iface: iface, Sweeper: sweeper}
 }
 
 func (s *Scanner) Name() string { return "arp" }
@@ -30,8 +32,11 @@ func (s *Scanner) Scan(ctx context.Context, out chan<- discovery.Device) error {
 	}
 
 	if s.Sweeper != nil {
+		// this feels awkward
 		s.Sweeper.Start(ctx)
 	}
+
+	time.Sleep(1 * time.Second)
 
 	return s.readARPCache(ctx, out)
 }

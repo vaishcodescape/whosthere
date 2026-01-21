@@ -7,12 +7,13 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ramonvermeulen/whosthere/internal/core/discovery"
 	"go.uber.org/zap"
 )
 
 const (
 	maxConcurrentTriggers = 200
-	triggerDeadline       = 1200 * time.Millisecond
+	triggerDeadline       = 300 * time.Millisecond
 	tcpDialTimeout        = 300 * time.Millisecond
 )
 
@@ -27,12 +28,8 @@ var (
 // by sending UDP/TCP packets to IPs in the target subnet. This causes the OS
 // to send ARP requests for those IPs, populating the ARP cache which can
 // then be read by the ARP scanner.
-type Sweeper interface {
-	Start(ctx context.Context)
-	Trigger(subnet *net.IPNet)
-}
-
-type sweeper struct {
+type Sweeper struct {
+	iface    *discovery.InterfaceInfo
 	interval time.Duration
 	debounce time.Duration
 
@@ -44,7 +41,7 @@ type sweeper struct {
 	workCh   chan *net.IPNet
 }
 
-func NewSweeper(interval, debounce time.Duration) Sweeper {
+func NewSweeper(iface *discovery.InterfaceInfo, interval, debounce time.Duration) *Sweeper {
 	if interval <= 0 {
 		interval = 5 * time.Minute
 	}
@@ -53,9 +50,10 @@ func NewSweeper(interval, debounce time.Duration) Sweeper {
 	}
 	logger := zap.L().With(
 		zap.String("scanner", "arp"),
-		zap.String("component", "sweeper"),
+		zap.String("component", "Sweeper"),
 	)
-	return &sweeper{
+	return &Sweeper{
+		iface:    iface,
 		interval: interval,
 		debounce: debounce,
 		logger:   logger,
@@ -64,7 +62,7 @@ func NewSweeper(interval, debounce time.Duration) Sweeper {
 	}
 }
 
-func (s *sweeper) Start(ctx context.Context) {
+func (s *Sweeper) Start(ctx context.Context) {
 	s.mu.Lock()
 	if s.started {
 		s.mu.Unlock()
@@ -73,10 +71,9 @@ func (s *sweeper) Start(ctx context.Context) {
 	s.started = true
 	s.mu.Unlock()
 
-	localIP, subnet, err := getLocalNetwork()
-	if err == nil && is24(subnet) {
-		s.enqueue(subnet)
-	}
+	subnet := s.iface.IPv4Net
+	localIP := *s.iface.IPv4Addr
+	s.enqueue(subnet)
 
 	ticker := time.NewTicker(s.interval)
 	go func() {
@@ -86,9 +83,7 @@ func (s *sweeper) Start(ctx context.Context) {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				if subnet != nil && is24(subnet) {
-					s.enqueue(subnet)
-				}
+				s.enqueue(subnet)
 			case sn := <-s.workCh:
 				if sn == nil {
 					continue
@@ -99,14 +94,11 @@ func (s *sweeper) Start(ctx context.Context) {
 	}()
 }
 
-func (s *sweeper) Trigger(subnet *net.IPNet) {
-	if subnet == nil || !is24(subnet) {
-		return
-	}
+func (s *Sweeper) Trigger(subnet *net.IPNet) {
 	s.enqueue(subnet)
 }
 
-func (s *sweeper) enqueue(subnet *net.IPNet) {
+func (s *Sweeper) enqueue(subnet *net.IPNet) {
 	key := subnet.String()
 	now := time.Now()
 
@@ -126,7 +118,7 @@ func (s *sweeper) enqueue(subnet *net.IPNet) {
 	}
 }
 
-func (s *sweeper) runSweep(ctx context.Context, subnet *net.IPNet, localIP net.IP) {
+func (s *Sweeper) runSweep(ctx context.Context, subnet *net.IPNet, localIP net.IP) {
 	ips := generateSubnetIPs(subnet, localIP)
 	if len(ips) == 0 {
 		return
@@ -137,19 +129,12 @@ func (s *sweeper) runSweep(ctx context.Context, subnet *net.IPNet, localIP net.I
 	s.logger.Debug("ARP triggering completed", zap.String("subnet", subnet.String()))
 }
 
-func is24(subnet *net.IPNet) bool {
-	if subnet == nil {
-		return false
-	}
-	ones, bits := subnet.Mask.Size()
-	return ones == 24 && bits == 32
-}
-
 func triggerSubnetSweep(ctx context.Context, ips []net.IP) {
 	var wg sync.WaitGroup
 	sem := make(chan struct{}, maxConcurrentTriggers)
 
 	for _, ip := range ips {
+		zap.L().Debug("Triggering ARP for IP", zap.String("ip", ip.String()))
 		select {
 		case <-ctx.Done():
 			return

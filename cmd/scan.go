@@ -8,14 +8,9 @@ import (
 
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
 
+	"github.com/ramonvermeulen/whosthere/internal/core"
 	"github.com/ramonvermeulen/whosthere/internal/core/discovery"
-	"github.com/ramonvermeulen/whosthere/internal/core/discovery/arp"
-	"github.com/ramonvermeulen/whosthere/internal/core/discovery/mdns"
-	"github.com/ramonvermeulen/whosthere/internal/core/discovery/ssdp"
-	"github.com/ramonvermeulen/whosthere/internal/core/logging"
-	"github.com/ramonvermeulen/whosthere/internal/core/oui"
 )
 
 var scanCmd = &cobra.Command{
@@ -24,59 +19,45 @@ var scanCmd = &cobra.Command{
 	Long: `Run one or more scanners directly (mdns, ssdp, arp).
 
 Examples:
-  whosthere scan -s mdns
-  whosthere scan -s "arp,ssdp" -t 30
+ whosthere scan -s mdns
+ whosthere scan -s "arp,ssdp" -t 30
 `,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		scannerNames, _ := cmd.Flags().GetString("scanner")
 		timeoutSec, _ := cmd.Flags().GetInt("timeout")
 		scanDuration := time.Duration(timeoutSec) * time.Second
 
-		level := logging.LevelFromEnv(zapcore.InfoLevel)
-		_, _, err := logging.Init(level, true)
+		result, err := InitComponents("", true)
 		if err != nil {
 			return err
 		}
 
 		ctx := context.Background()
 
-		ouiDB, err := oui.Init(ctx)
-		if err != nil {
-			zap.L().Warn("failed to initialize OUI DB; continuing without OUI", zap.Error(err))
-			ouiDB = nil
-		}
-
-		var scList []discovery.Scanner
-		sweeper := arp.NewSweeper(5*time.Minute, time.Minute)
+		var enabled []string
 		requested := strings.Split(scannerNames, ",")
 		for _, r := range requested {
 			r = strings.TrimSpace(strings.ToLower(r))
 			switch r {
 			case "", "all":
-				// add all
-				scList = append(scList, &ssdp.Scanner{}, arp.NewScanner(sweeper), &mdns.Scanner{})
-			case "ssdp":
-				scList = append(scList, &ssdp.Scanner{})
-			case "arp":
-				scList = append(scList, arp.NewScanner(sweeper))
-			case "mdns":
-				scList = append(scList, &mdns.Scanner{})
+				enabled = []string{"ssdp", "arp", "mdns"}
+			case "ssdp", "arp", "mdns":
+				enabled = append(enabled, r)
 			default:
 				return fmt.Errorf("unknown scanner: %s", r)
 			}
 		}
 
-		if len(scList) == 0 {
+		if len(enabled) == 0 {
 			return fmt.Errorf("no scanners selected")
 		}
 
-		eng := discovery.NewEngine(scList, discovery.WithTimeout(scanDuration), discovery.WithOUIRegistry(ouiDB))
+		eng := core.BuildEngine(result.Interface, result.OuiDB, enabled, scanDuration)
 
 		ctx, cancel := context.WithTimeout(ctx, scanDuration)
 		defer cancel()
 
-		devices, err := eng.Stream(ctx, func(d discovery.Device) {
-		})
+		devices, err := eng.Stream(ctx, func(_ *discovery.Device) {})
 		if err != nil {
 			return err
 		}

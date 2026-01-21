@@ -1,19 +1,15 @@
 package cmd
 
 import (
-	"context"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
 
 	"github.com/ramonvermeulen/whosthere/internal/core/config"
-	"github.com/ramonvermeulen/whosthere/internal/core/logging"
-	"github.com/ramonvermeulen/whosthere/internal/core/oui"
 	"github.com/ramonvermeulen/whosthere/internal/core/version"
 	"github.com/ramonvermeulen/whosthere/internal/ui"
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
 )
 
 const (
@@ -62,40 +58,39 @@ func Execute() {
 }
 
 func run(*cobra.Command, []string) error {
-	ctx := context.Background()
-
-	level := logging.LevelFromEnv(zapcore.InfoLevel)
-	logger, logPath, err := logging.Init(level, false)
+	result, err := InitComponents(whosthereFlags.ConfigFile, false)
 	if err != nil {
-		return err
-	} else {
-		logger.Info("logger initialized", zap.String("path", logPath), zap.String("level", level.String()))
-	}
-
-	cfg, err := config.Load(whosthereFlags.ConfigFile)
-	if err != nil {
-		zap.L().Error("failed to load or create config", zap.Error(err))
 		return err
 	}
 
-	ouiDB, err := oui.Init(ctx)
-	if err != nil {
-		zap.L().Warn("failed to initialize OUI database; manufacturer lookups will be disabled", zap.Error(err))
+	logger := result.Logger
+	logPath := result.LogPath
+	cfg := result.Config
+	ouiDB := result.OuiDB
+
+	logger.Info("logger initialized", zap.String("path", logPath), zap.String("level", logger.Level().String()))
+
+	if ouiDB == nil {
+		logger.Warn("OUI database is not initialized; manufacturer lookups will be disabled")
 	}
 
 	if whosthereFlags.PprofPort != "" {
 		go func() {
-			zap.L().Info("starting pprof server", zap.String("port", whosthereFlags.PprofPort))
+			logger.Info("starting pprof server", zap.String("port", whosthereFlags.PprofPort))
 			if err := http.ListenAndServe(":"+whosthereFlags.PprofPort, nil); err != nil {
-				zap.L().Error("pprof server failed", zap.Error(err))
+				logger.Error("pprof server failed", zap.Error(err))
 			}
 		}()
 	}
 
-	app := ui.NewApp(cfg, ouiDB, version.Version)
+	app, err := ui.NewApp(cfg, ouiDB, version.Version)
+	if err != nil {
+		logger.Error("failed to create app", zap.Error(err))
+		return err
+	}
 
 	if err := app.Run(); err != nil {
-		zap.L().Error("app run failed", zap.Error(err))
+		logger.Error("app run failed", zap.Error(err))
 		return err
 	}
 

@@ -1,68 +1,69 @@
 package arp
 
 import (
-	"errors"
-	"fmt"
 	"net"
+
+	"go.uber.org/zap"
 )
 
-var (
-	ErrNoIPv4Interface = errors.New("arp: no IPv4 network interface found")
-)
-
-// getLocalNetwork returns local IPv4 address and subnet.
-// Returns the first non-loopback IPv4 interface found.
-func getLocalNetwork() (net.IP, *net.IPNet, error) {
-	ifaces, err := net.Interfaces()
-	if err != nil {
-		return nil, nil, fmt.Errorf("list interfaces: %w", err)
-	}
-
-	for _, iface := range ifaces {
-		// Skip down and loopback interfaces
-		if iface.Flags&net.FlagUp == 0 || iface.Flags&net.FlagLoopback != 0 {
-			continue
-		}
-
-		addrs, err := iface.Addrs()
-		if err != nil {
-			continue
-		}
-
-		for _, addr := range addrs {
-			ipNet, ok := addr.(*net.IPNet)
-			if !ok {
-				continue
-			}
-
-			ip := ipNet.IP.To4()
-			if ip != nil && !ip.IsLoopback() {
-				return ip, ipNet, nil
-			}
-		}
-	}
-
-	return nil, nil, ErrNoIPv4Interface
-}
-
+// generateSubnetIPs generates a list of IPs in the given subnet,
+// Skipping the specified IP (usually the interface's own IP).
+// It includes the network address and broadcast address.
+// It limits the scan to a /16 equivalent if the subnet is larger.
+// In that case it will only scan the first 65534 IPs of that subnet.
 func generateSubnetIPs(subnet *net.IPNet, skipIP net.IP) []net.IP {
+	// If users request it, we could potentially add an option to override the /16 limit via configuration?
 	var ips []net.IP
 	network := subnet.IP.To4()
 	if network == nil {
-		return ips // Not IPv4
+		return ips
 	}
 
-	ones, bits := subnet.Mask.Size()
-	if ones != 24 || bits != 32 {
-		return ips // Not a /24 network
+	ones, _ := subnet.Mask.Size()
+	if ones < 16 {
+		zap.L().Warn("large subnet detected, limiting ARP scan to /16 equivalent", zap.Int("prefix", ones), zap.String("subnet", subnet.String()))
 	}
 
-	for i := 1; i <= 254; i++ {
-		ip := net.IPv4(network[0], network[1], network[2], byte(i))
-		if !ip.Equal(skipIP) {
-			ips = append(ips, ip)
+	networkIP := subnet.IP.Mask(subnet.Mask)
+	broadcastIP := make(net.IP, len(networkIP))
+	copy(broadcastIP, networkIP)
+
+	effectiveMask := subnet.Mask
+	if ones < 16 {
+		effectiveMask = net.CIDRMask(16, 32)
+	}
+	for i := range network {
+		// sets broadcast IP to a /16 equivalent if subnet is larger
+		broadcastIP[i] |= ^effectiveMask[i]
+	}
+
+	currentIP := make(net.IP, len(networkIP))
+	copy(currentIP, networkIP)
+
+	for {
+		if !currentIP.Equal(skipIP) {
+			ipCopy := make(net.IP, len(currentIP))
+			copy(ipCopy, currentIP)
+			ips = append(ips, ipCopy)
 		}
+		if currentIP.Equal(broadcastIP) {
+			break
+		}
+		currentIP = incrementIP(currentIP)
 	}
 
 	return ips
+}
+
+// incrementIP increments the IP address by 1
+func incrementIP(ip net.IP) net.IP {
+	newIP := make(net.IP, len(ip))
+	copy(newIP, ip)
+	for i := len(newIP) - 1; i >= 0; i-- {
+		newIP[i]++
+		if newIP[i] != 0 {
+			break
+		}
+	}
+	return newIP
 }
