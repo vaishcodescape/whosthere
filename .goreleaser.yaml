@@ -16,7 +16,9 @@ builds:
       - -X main.commitStr={{ .Commit }}
       - -X main.dateStr={{ .Date }}
     env:
-      - CGO_ENABLED=0
+      # The CGO_ENABLED=1 is required for clipboard support
+      # see https://github.com/golang-design/clipboard
+      - CGO_ENABLED=1
 
 changelog:
   sort: "asc"

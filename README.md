@@ -202,6 +202,17 @@ Logs are written to the application's state directory:
 
 When not running in TUI mode, logs are also output to the console.
 
+## Known Issues
+For clipboard functionality to work:
+
+**Runtime requirements:**
+- **Linux (X11)**: X11 client library (e.g., `libx11-6` on Ubuntu, `libX11` on Fedora/Arch, often pre-installed).
+- **Linux (Wayland)**: Not natively supported. May require XWayland.
+- **macOS/Windows**: No dependencies.
+
+**Build requirements** (when compiling from source):
+- Linux: X11 development package (`libx11-dev`, `libX11-devel`, or `libx11`)
+
 ## Disclaimer
 
 Whosthere is intended for use on networks where you have permission to perform network discovery and scanning,

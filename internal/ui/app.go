@@ -75,7 +75,7 @@ func NewApp(cfg *config.Config, ouiDB *oui.Registry, version string) (*App, erro
 
 	err = clipboard.Init()
 	if err != nil {
-		return nil, fmt.Errorf("failed to init clipboard: %w", err)
+		zap.L().Warn("failed to initialize clipboard; copy to clipboard will not work; on linux libx11-dev or xorg-dev or libX11-devel are required;", zap.Error(err))
 	}
 
 	return a, nil
