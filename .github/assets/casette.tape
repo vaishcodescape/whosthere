@@ -19,7 +19,7 @@ Set BorderRadius 10
 Sleep 500ms
 Type "whosthere --help"
 Enter
-Sleep 4.5s
+Sleep 3.5s
 
 Hide
 Type "clear"
@@ -37,6 +37,21 @@ Escape
 Type "[27;5;116~"
 Sleep 500ms
 Type "k"
+Sleep 400ms
+Type "j"
+Sleep 400ms
+Type "j"
+Sleep 400ms
+Type "j"
+Sleep 400ms
+Type "j"
+Sleep 400ms
+Type "j"
+Sleep 400ms
+Type "j"
+Sleep 400ms
+Type "j"
+Sleep 400ms
 Enter
 Sleep 1s
 Type "jjjk"
