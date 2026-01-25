@@ -23,5 +23,7 @@ func main() {
 	version.Commit = commitStr
 	version.Date = dateStr
 
+	cmd.SetVersion(version.Version)
+
 	cmd.Execute()
 }

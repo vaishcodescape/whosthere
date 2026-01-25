@@ -37,7 +37,6 @@ var (
 )
 
 func init() {
-	rootCmd.Version = version.Version
 	if theme.IsNoColor() {
 		cyan = ""
 		reset = ""
@@ -67,6 +66,10 @@ func Execute() {
 	if err != nil {
 		os.Exit(1)
 	}
+}
+
+func SetVersion(v string) {
+	rootCmd.Version = v
 }
 
 func run(*cobra.Command, []string) error {
