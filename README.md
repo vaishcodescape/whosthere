@@ -32,12 +32,19 @@ Whosthere provides a friendly, intuitive way to answer the question every networ
 
 ## Installation
 
+Via Homebrew:
+
 ```bash
-brew tap ramonvermeulen/whosthere
 brew install whosthere
 ```
 
-Or with Go:
+On NixOS:
+
+```bash
+nix profile install nixpkgs#whosthere
+```
+
+With Go:
 
 ```bash
 go install github.com/ramonvermeulen/whosthere@latest
