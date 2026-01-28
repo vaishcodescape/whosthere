@@ -19,6 +19,7 @@ type Scanner interface {
 // Engine coordinates multiple scanners and merges device results.
 type Engine struct {
 	Scanners    []Scanner
+	Sweeper     *Sweeper
 	Timeout     time.Duration
 	OUIRegistry *oui.Registry
 }
@@ -67,11 +68,12 @@ func (e *Engine) fillManufacturerIfEmpty(d *Device) {
 }
 
 // Stream runs scanners and invokes onDevice for each incremental merged device observed.
+// TODO: instead of using a callback, maybe expose a channel for results?
 func (e *Engine) Stream(ctx context.Context, onDevice func(*Device)) ([]Device, error) {
 	ctx, cancel := context.WithTimeout(ctx, e.Timeout)
 	defer cancel()
 
-	out := make(chan Device, 128)
+	out := make(chan Device, 256)
 	var wg sync.WaitGroup
 
 	// TODO(ramon): currently all scanners share the same channel, might be worth to have a channel per scanner

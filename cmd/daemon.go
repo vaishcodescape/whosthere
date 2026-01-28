@@ -17,15 +17,20 @@ import (
 	"github.com/ramonvermeulen/whosthere/internal/core/version"
 )
 
-var daemonCmd = &cobra.Command{
-	Use:   "daemon",
-	Short: "Run whosthere in daemon mode with an HTTP API",
-	Long: `Run whosthere in daemon mode, continuously scanning the network and providing live device data via HTTP API.
+func NewDaemonCommand() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "daemon",
+		Short: "Run whosthere in daemon mode with an HTTP API",
+		Long: `Run whosthere in daemon mode, continuously scanning the network and providing live device data via HTTP API.
 
 Examples:
  whosthere daemon --port 8080
 `,
-	RunE: runDaemon,
+		RunE: runDaemon,
+	}
+
+	cmd.Flags().StringP("port", "p", "", "Port for the HTTP API server")
+	return cmd
 }
 
 func runDaemon(cmd *cobra.Command, _ []string) error {
@@ -40,11 +45,8 @@ func runDaemon(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
-	ctx := context.Background()
-
 	appState := state.NewAppState(result.Config, version.Version)
-
-	eng := core.BuildEngine(result.Interface, result.OuiDB, []string{"ssdp", "arp", "mdns"}, 30*time.Second)
+	eng := core.BuildEngine(result.Interface, result.OuiDB, result.Config)
 
 	http.HandleFunc("/devices", func(w http.ResponseWriter, r *http.Request) {
 		handleDevices(w, r, appState)
@@ -61,9 +63,13 @@ func runDaemon(cmd *cobra.Command, _ []string) error {
 		}
 	}()
 
+	if eng.Sweeper != nil {
+		go eng.Sweeper.Start(context.Background())
+	}
+
 	for {
 		zap.L().Info("starting scan cycle")
-		_, err := eng.Stream(ctx, func(d *discovery.Device) {
+		_, err := eng.Stream(context.Background(), func(d *discovery.Device) {
 			appState.UpsertDevice(d)
 		})
 		if err != nil {
@@ -111,9 +117,4 @@ func handleHealth(w http.ResponseWriter, r *http.Request) {
 	zap.L().Info("incoming request", zap.String("method", r.Method), zap.String("path", r.URL.Path))
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte("OK"))
-}
-
-func init() {
-	daemonCmd.Flags().StringP("port", "p", "", "Port for the HTTP API server")
-	rootCmd.AddCommand(daemonCmd)
 }

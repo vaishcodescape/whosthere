@@ -1,4 +1,4 @@
-package arp
+package discovery
 
 import (
 	"context"
@@ -7,7 +7,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ramonvermeulen/whosthere/internal/core/discovery"
 	"go.uber.org/zap"
 )
 
@@ -29,24 +28,15 @@ var (
 // to send ARP requests for those IPs, populating the ARP cache which can
 // then be read by the ARP scanner.
 type Sweeper struct {
-	iface    *discovery.InterfaceInfo
+	iface    *InterfaceInfo
 	interval time.Duration
-	debounce time.Duration
 
 	logger *zap.Logger
-
-	mu       sync.Mutex
-	started  bool
-	inFlight map[string]time.Time
-	workCh   chan *net.IPNet
 }
 
-func NewSweeper(iface *discovery.InterfaceInfo, interval, debounce time.Duration) *Sweeper {
+func NewSweeper(iface *InterfaceInfo, interval time.Duration) *Sweeper {
 	if interval <= 0 {
 		interval = 5 * time.Minute
-	}
-	if debounce <= 0 {
-		debounce = 60 * time.Second
 	}
 	logger := zap.L().With(
 		zap.String("scanner", "arp"),
@@ -55,67 +45,30 @@ func NewSweeper(iface *discovery.InterfaceInfo, interval, debounce time.Duration
 	return &Sweeper{
 		iface:    iface,
 		interval: interval,
-		debounce: debounce,
 		logger:   logger,
-		inFlight: make(map[string]time.Time),
-		workCh:   make(chan *net.IPNet, 8),
 	}
 }
 
 func (s *Sweeper) Start(ctx context.Context) {
-	s.mu.Lock()
-	if s.started {
-		s.mu.Unlock()
-		return
-	}
-	s.started = true
-	s.mu.Unlock()
-
 	subnet := s.iface.IPv4Net
 	localIP := *s.iface.IPv4Addr
-	s.enqueue(subnet)
 
 	ticker := time.NewTicker(s.interval)
 	go func() {
 		defer ticker.Stop()
+		defer ctx.Done()
 		for {
 			select {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				s.enqueue(subnet)
-			case sn := <-s.workCh:
-				if sn == nil {
-					continue
-				}
-				s.runSweep(ctx, sn, localIP)
+				s.runSweep(ctx, subnet, localIP)
 			}
 		}
 	}()
-}
 
-func (s *Sweeper) Trigger(subnet *net.IPNet) {
-	s.enqueue(subnet)
-}
-
-func (s *Sweeper) enqueue(subnet *net.IPNet) {
-	key := subnet.String()
-	now := time.Now()
-
-	s.mu.Lock()
-	last, ok := s.inFlight[key]
-	if ok && now.Sub(last) < s.debounce {
-		s.mu.Unlock()
-		return
-	}
-	s.inFlight[key] = now
-	s.mu.Unlock()
-
-	select {
-	case s.workCh <- subnet:
-	default:
-		// Drop if the queue is full to avoid blocking callers.
-	}
+	// run the initial sweep so that we don't have to wait for the first tick
+	go s.runSweep(ctx, subnet, localIP)
 }
 
 func (s *Sweeper) runSweep(ctx context.Context, subnet *net.IPNet, localIP net.IP) {
@@ -182,4 +135,66 @@ func sendARPTarget(ip net.IP) {
 			_ = c.Close()
 		}
 	}
+}
+
+// generateSubnetIPs generates a list of IPs in the given subnet,
+// Skipping the specified IP (usually the interface's own IP).
+// It includes the network address and broadcast address.
+// It limits the scan to a /16 equivalent if the subnet is larger.
+// In that case it will only scan the first 65534 IPs of that subnet.
+func generateSubnetIPs(subnet *net.IPNet, skipIP net.IP) []net.IP {
+	// If users request it, we could potentially add an option to override the /16 limit via configuration?
+	var ips []net.IP
+	network := subnet.IP.To4()
+	if network == nil {
+		return ips
+	}
+
+	ones, _ := subnet.Mask.Size()
+	if ones < 16 {
+		zap.L().Warn("large subnet detected, limiting ARP scan to /16 equivalent", zap.Int("prefix", ones), zap.String("subnet", subnet.String()))
+	}
+
+	networkIP := subnet.IP.Mask(subnet.Mask)
+	broadcastIP := make(net.IP, len(networkIP))
+	copy(broadcastIP, networkIP)
+
+	effectiveMask := subnet.Mask
+	if ones < 16 {
+		effectiveMask = net.CIDRMask(16, 32)
+	}
+	for i := range network {
+		// sets broadcast IP to a /16 equivalent if subnet is larger
+		broadcastIP[i] |= ^effectiveMask[i]
+	}
+
+	currentIP := make(net.IP, len(networkIP))
+	copy(currentIP, networkIP)
+
+	for {
+		if !currentIP.Equal(skipIP) {
+			ipCopy := make(net.IP, len(currentIP))
+			copy(ipCopy, currentIP)
+			ips = append(ips, ipCopy)
+		}
+		if currentIP.Equal(broadcastIP) {
+			break
+		}
+		currentIP = incrementIP(currentIP)
+	}
+
+	return ips
+}
+
+// incrementIP increments the IP address by 1
+func incrementIP(ip net.IP) net.IP {
+	newIP := make(net.IP, len(ip))
+	copy(newIP, ip)
+	for i := len(newIP) - 1; i >= 0; i-- {
+		newIP[i]++
+		if newIP[i] != 0 {
+			break
+		}
+	}
+	return newIP
 }
